@@ -234,6 +234,7 @@ export function rolesApp(ctx) {
             ? field('音色描述', textArea('voice', r.voice, 'rows="3" placeholder="例如：二十岁出头的女生，声音清亮，带点慵懒，说话慢悠悠的"'), '用一到四句话描述：性别年龄、音色质感、情绪语气、语速节奏。不要写混响、回声这类后期效果，也不要写“普通”“正常”这种模糊的词。')
             : field(mimo === 'clone' ? '克隆样本' : r.engine === 'custom' ? '音色' : '音色 ID', input('voice', r.voice, 'text', `placeholder="${mimo === 'clone' ? '填克隆样本的名字，或从列表选择' : r.engine === 'custom' ? '音色的名字或者音色 ID，或从列表选择' : '粘贴音色 ID 或从列表选择'}" autocomplete="off"`), r.engine === 'custom' ? '「自己的接口」里添加过的音色写它的名字；没添加的，直接填服务认的音色 ID 就行（比如公益站音色页网址的最后一段，粘贴整个网址也可以）。服务列出了音色的，「从列表选」里都有。' : '')}
         </div>
+        <div class="group pad"><div class="field"><div class="meter-label"><span>角色响度补偿</span><output>${Math.round((Number(r.playbackVolume ?? 1)) * 100)}%</output></div><input class="slider" type="range" data-field="playbackVolume" min="50" max="150" step="5" value="${Math.round((Number(r.playbackVolume ?? 1)) * 100)}" aria-label="角色响度补偿"><small class="hint">100% 跟随总音量；只影响播放，不会重新生成或修改已缓存的音频。</small></div></div>
         <details data-group="role-model"><summary>${modelTitle(r)}<small class="fold-note">${esc([modelNote(r), r.language ? languageName(r.language) : '跟随默认'].filter(Boolean).join(' · '))}</small></summary><div class="fold-body">
           ${modelField(r, c, schema)}
           ${languageField('language', r.language || '', true, typedLanguages(api.getState()))}
@@ -384,7 +385,8 @@ export function rolesApp(ctx) {
   v.dispose = () => { swipe?.dispose(); swipe = null; if (tried) ctx.win.URL.revokeObjectURL(tried.url); dispose(); };
   v.on('input', '[data-field]', el => {
     if (!current) return;
-    current[el.dataset.field] = el.value;
+    current[el.dataset.field] = el.dataset.field === 'playbackVolume' ? Math.max(.5, Math.min(1.5, Number(el.value) / 100)) : el.value;
+    if (el.dataset.field === 'playbackVolume') { const output = el.closest('.field')?.querySelector('output'); if (output) output.textContent = el.value + '%'; }
     if (el.dataset.field === 'customModel') current.customModelSet=customSetOf(api.readState().connections.custom,current.model);
     if (el.dataset.field === 'voice') current.autoVoice = false;
     changed();

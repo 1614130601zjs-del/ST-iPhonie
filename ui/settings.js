@@ -437,6 +437,7 @@ export function settingsApp(ctx) {
           ${s.general.hideStoryWaves !== true ? toggle('storyTools', '楼层工具按钮', s.general.storyTools !== false, '每层回复右边的小手机工具按钮：给这层楼生图、给这层楼配音、从这层看视觉小说、台词小窗、整条播放。关掉后不显示；长按声波的下载、收藏、重新配音照常。') : ''}
           ${toggle('waveformEnabled', '声波动效', s.general.waveformEnabled, '台词旁和手机里的声波随真实音频跳动。系统开启减少动态效果时保持静止。\n\n正文声波的颜色跟随酒馆主题：\n· 虚线小点：这个角色还没配音（斜体色）\n· 淡色：还没生成（正文色）\n· 引号色：已生成，可以播放\n· 引号色加底色：正在播放\n· 下划线色：已经播放过')}
           <div class="field"><div class="meter-label"><span>播放音量</span><output>${Math.round(phone.volume * 100)}%</output></div><input class="slider" type="range" data-field="volume" min="0" max="100" value="${Math.round(phone.volume * 100)}" aria-label="播放音量"></div>
+          <div class="field"><span>对白连播间隔</span><select data-field="dialogueGap" aria-label="对白连播间隔">${[[0,'无间隔'],[.3,'0.3 秒'],[.5,'0.5 秒'],[1,'1 秒'],[1.5,'1.5 秒'],[2,'2 秒']].map(([value,label])=>`<option value="${value}"${Number(s.general.dialogueGap ?? .5)===value?' selected':''}>${label}</option>`).join('')}</select><small class="hint">每句配音结束后，等待这段时间再播放下一句；不影响音频生成。</small></div>
         </div></details>`
       + groupTitle('手机')
       + `<div class="group">${toggle('floatingEnabled', '悬浮入口', s.general.floatingEnabled, '在酒馆里显示可以拖动的入口：电脑上是小球，手机上是贴在屏幕边的小方条。点一下展开，再点一次进入手机。')}
@@ -481,6 +482,7 @@ export function settingsApp(ctx) {
     // (正文语音's and 正文出图's switches are in their sheets.)
     if (['shortTags', 'hideStoryWaves', 'storyTools', 'voiceIsland', 'floatingEnabled', 'waveformEnabled', 'cacheEnabled', 'wallpaperMotion'].includes(key)) api.updateGeneral({[key]: el.checked});
     else if (key === 'volume') await api.setVolume(Number(el.value) / 100);
+    else if (key === 'dialogueGap') api.updateGeneral({dialogueGap: Number(el.value)});
     else if (key === 'lockOnOpen') await api.savePhone({lockOnOpen: el.checked});
     else if (key === 'partition') { api.saveChatOptions({partition: el.value}); ctx.notify({card: '已按角色卡分开', chat: '已按聊天分开：开新聊天就是一部新手机'}[el.value] || '已关闭分区，所有内容一起显示'); }
   });

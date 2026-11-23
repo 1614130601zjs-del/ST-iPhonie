@@ -108,7 +108,7 @@ export class BrowserAudio {
  }
  getVolume() { return this.volume; }
  /** effect: 'phone' | 'inner' | '' (core/voice-fx.js), put between the line and the volume. */
- async play(blob, signal = new AbortController().signal, { effect = '', onStart } = {}) {
+ async play(blob, signal = new AbortController().signal, { effect = '', onStart, volume = 1 } = {}) {
   signal.throwIfAborted();
   const ctx = this.context;
   if (!ctx || ctx.state !== 'running') throw Error('请再点一次播放，允许浏览器开启声音');
@@ -128,7 +128,9 @@ export class BrowserAudio {
   check();
   if(ctx.state!=='running'&&!this.pausedByUser){let timer;try{await Promise.race([ctx.resume(),new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);}catch{}finally{clearTimeout(timer);}check();if(ctx.state!=='running')throw Error('音频设备已暂停或被系统打断，请回到页面再点一次播放');}
   return new Promise((resolve, reject) => {
-   const source = ctx.createBufferSource(), fx = effectChain(ctx, effect, this.gain);
+   const source = ctx.createBufferSource(), fx = effectChain(ctx, effect, this.gain), lineGain = ctx.createGain();
+   lineGain.gain.value = 0;
+   lineGain.gain.setTargetAtTime(volumeValue(volume), ctx.currentTime, .025);
    let settled = false;
    const finish = error => {
     if (settled) return;
@@ -136,6 +138,7 @@ export class BrowserAudio {
     signal.removeEventListener('abort', abort);
     source.onended = null;
     try { source.disconnect(); } catch {}
+    try { lineGain.disconnect(); } catch {}
     // An echo rings on a little after the line; stopped, it stops with it.
     if (fx) { if (error) fx.dispose(); else setTimeout(() => fx.dispose(), fx.tail * 1000 + 200); }
     if (this.source === source) this.source = null;
@@ -149,7 +152,8 @@ export class BrowserAudio {
    };
    try {
     source.buffer = buffer;
-    source.connect(fx ? fx.input : this.gain);
+    source.connect(lineGain);
+    lineGain.connect(fx ? fx.input : this.gain);
     this.source = source;
     this.finish = finish;
     source.onended = () => finish();
@@ -446,6 +450,19 @@ export class DialoguePlayer {
    this.emit('paused', '等待下一句');
    if (!await this.waitForResume(epoch)) return false;
    this.boundary = false;
+  } else if (this.index + 1 < this.queue.length) {
+   const gap = Number((this.settingsOverride || this.settings()).general?.dialogueGap ?? .5);
+   if (gap > 0) {
+    const signal = this.controller?.signal;
+    await new Promise(resolve => {
+     let done = false;
+     const finish = () => { if (done) return; done = true; clearTimeout(timer); signal?.removeEventListener('abort', finish); resolve(); };
+     const timer = setTimeout(finish, Math.min(5000, Math.max(0, gap * 1000)));
+     signal?.addEventListener('abort', finish, {once: true});
+     if (signal?.aborted) finish();
+    });
+    if (!this.canContinue(epoch) || !await this.waitForResume(epoch)) return false;
+   }
   }
   this.index++; return true;
  }
@@ -509,7 +526,8 @@ export class DialoguePlayer {
     if (this.lookahead) this.ahead = this.makeAhead(this.index + 1, signal);
     if (!await this.waitForResume(epoch)) return;
     this.emit('playing', '正在播放 · ' + line.role + (fromCache ? ' · 缓存' : ''));
-    await this.sink.play(blob, signal, { effect: lineEffect(line), onStart: this.onLineStart });
+    const playbackVolume = Math.min(1, this.volume * Math.max(.5, Math.min(1.5, Number(route.playbackVolume ?? 1))));
+    await this.sink.play(blob, signal, { effect: lineEffect(line), onStart: this.onLineStart, volume: playbackVolume });
     if (!this.canContinue(epoch)) return;
     this.played.add(key);
     if (!await this.finishedLine(epoch)) return;
@@ -550,7 +568,9 @@ export class DialoguePlayer {
    await this.sink.unlock();
    if (!this.canContinue(epoch) || !await this.waitForResume(epoch)) return;
    this.emit('playing', '正在播放 · ' + (this.speaker || '收藏音频'));
-   await this.sink.play(blob, signal, { effect: lineEffect(line) });
+   const route = findRoute(this.settings().routes, line.role);
+   const playbackVolume = Math.min(1, this.volume * Math.max(.5, Math.min(1.5, Number(route?.playbackVolume ?? metadata.route?.playbackVolume ?? 1))));
+   await this.sink.play(blob, signal, { effect: lineEffect(line), volume: playbackVolume });
    if (!this.canContinue(epoch)) return;
    if (this.requestKey) this.played.add(this.requestKey);
    this.complete();
