@@ -130,7 +130,8 @@ export class BrowserAudio {
   return new Promise((resolve, reject) => {
    const source = ctx.createBufferSource(), fx = effectChain(ctx, effect, this.gain), lineGain = ctx.createGain();
    lineGain.gain.value = 0;
-   lineGain.gain.setTargetAtTime(volumeValue(volume), ctx.currentTime, .025);
+   const lineLevel = Number(volume);
+   lineGain.gain.setTargetAtTime(Number.isFinite(lineLevel) ? Math.min(1.5, Math.max(0, lineLevel)) : 1, ctx.currentTime, .025);
    let settled = false;
    const finish = error => {
     if (settled) return;
@@ -526,7 +527,7 @@ export class DialoguePlayer {
     if (this.lookahead) this.ahead = this.makeAhead(this.index + 1, signal);
     if (!await this.waitForResume(epoch)) return;
     this.emit('playing', '正在播放 · ' + line.role + (fromCache ? ' · 缓存' : ''));
-    const playbackVolume = Math.min(1, this.volume * Math.max(.5, Math.min(1.5, Number(route.playbackVolume ?? 1))));
+    const playbackVolume = this.volume * Math.max(.5, Math.min(1.5, Number(route.playbackVolume ?? 1)));
     await this.sink.play(blob, signal, { effect: lineEffect(line), onStart: this.onLineStart, volume: playbackVolume });
     if (!this.canContinue(epoch)) return;
     this.played.add(key);
@@ -569,7 +570,7 @@ export class DialoguePlayer {
    if (!this.canContinue(epoch) || !await this.waitForResume(epoch)) return;
    this.emit('playing', '正在播放 · ' + (this.speaker || '收藏音频'));
    const route = findRoute(this.settings().routes, line.role);
-   const playbackVolume = Math.min(1, this.volume * Math.max(.5, Math.min(1.5, Number(route?.playbackVolume ?? metadata.route?.playbackVolume ?? 1))));
+   const playbackVolume = this.volume * Math.max(.5, Math.min(1.5, Number(route?.playbackVolume ?? metadata.route?.playbackVolume ?? 1)));
    await this.sink.play(blob, signal, { effect: lineEffect(line), volume: playbackVolume });
    if (!this.canContinue(epoch)) return;
    if (this.requestKey) this.played.add(this.requestKey);
